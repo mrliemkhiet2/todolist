@@ -1,11 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Plus, MoreHorizontal, Calendar, User, AlertCircle } from 'lucide-react';
-import { Task } from '../../store/taskStore';
 import { format } from 'date-fns';
 
 interface TaskKanbanViewProps {
-  tasks: Task[];
+  tasks: any[];
 }
 
 const TaskKanbanView: React.FC<TaskKanbanViewProps> = ({ tasks }) => {
@@ -21,7 +20,7 @@ const TaskKanbanView: React.FC<TaskKanbanViewProps> = ({ tasks }) => {
     return tasks.filter(task => task.status === status);
   };
 
-  const getPriorityColor = (priority: Task['priority']) => {
+  const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'critical':
         return 'border-l-red-500';
@@ -98,9 +97,9 @@ const TaskKanbanView: React.FC<TaskKanbanViewProps> = ({ tasks }) => {
                   )}
 
                   {/* Task Tags */}
-                  {task.tags.length > 0 && (
+                  {task.tags && task.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-3">
-                      {task.tags.slice(0, 3).map((tag, idx) => (
+                      {task.tags.slice(0, 3).map((tag: string, idx: number) => (
                         <span
                           key={idx}
                           className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md"
@@ -117,17 +116,17 @@ const TaskKanbanView: React.FC<TaskKanbanViewProps> = ({ tasks }) => {
                   )}
 
                   {/* Subtasks Progress */}
-                  {task.subtasks.length > 0 && (
+                  {task.subtasks && task.subtasks.length > 0 && (
                     <div className="mb-3">
                       <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
                         <span>Subtasks</span>
-                        <span>{task.subtasks.filter(st => st.completed).length}/{task.subtasks.length}</span>
+                        <span>{task.subtasks.filter((st: any) => st.completed).length}/{task.subtasks.length}</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-1.5">
                         <div 
                           className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
                           style={{ 
-                            width: `${(task.subtasks.filter(st => st.completed).length / task.subtasks.length) * 100}%` 
+                            width: `${(task.subtasks.filter((st: any) => st.completed).length / task.subtasks.length) * 100}%` 
                           }}
                         />
                       </div>
@@ -137,10 +136,10 @@ const TaskKanbanView: React.FC<TaskKanbanViewProps> = ({ tasks }) => {
                   {/* Task Footer */}
                   <div className="flex items-center justify-between text-xs text-gray-500">
                     <div className="flex items-center space-x-3">
-                      {task.dueDate && (
+                      {task.due_date && (
                         <div className="flex items-center space-x-1">
                           <Calendar className="w-3 h-3" />
-                          <span>{format(new Date(task.dueDate), 'MMM d')}</span>
+                          <span>{format(new Date(task.due_date), 'MMM d')}</span>
                         </div>
                       )}
                       {task.assignee && (
@@ -157,7 +156,7 @@ const TaskKanbanView: React.FC<TaskKanbanViewProps> = ({ tasks }) => {
                       )}
                       <div className="w-6 h-6 bg-gray-200 rounded-full overflow-hidden">
                         <img 
-                          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${task.assignee || 'default'}`}
+                          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${task.assignee_id || 'default'}`}
                           alt="Assignee"
                           className="w-full h-full object-cover"
                         />

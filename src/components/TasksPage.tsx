@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   List, 
@@ -9,7 +9,8 @@ import {
   SortAsc, 
   Plus,
   Search,
-  ChevronDown
+  ChevronDown,
+  FolderOpen
 } from 'lucide-react';
 import { useTaskStore } from '../store/taskStore';
 import TaskListView from './views/TaskListView';
@@ -19,11 +20,15 @@ import TaskGanttView from './views/TaskGanttView';
 import TaskModal from './TaskModal';
 
 const TasksPage = () => {
-  const { viewMode, setViewMode, tasks, currentProject, projects, isLoading, error } = useTaskStore();
+  const { viewMode, setViewMode, tasks, currentProject, projects, isLoading, error, fetchTasks } = useTaskStore();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
+
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
 
   const currentProjectData = projects.find(p => p.id === currentProject);
   const filteredTasks = tasks.filter(task => {
@@ -59,6 +64,37 @@ const TasksPage = () => {
   ];
 
   const renderView = () => {
+    if (filteredTasks.length === 0 && !isLoading) {
+      return (
+        <div className="card p-12 text-center">
+          <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {searchQuery || statusFilter !== 'all' || priorityFilter !== 'all' 
+              ? 'No tasks found' 
+              : 'No tasks yet'
+            }
+          </h3>
+          <p className="text-gray-600 mb-6">
+            {searchQuery || statusFilter !== 'all' || priorityFilter !== 'all'
+              ? 'Try adjusting your search terms or filters.'
+              : currentProject 
+                ? 'Create your first task to get started with this project.'
+                : 'Select a project and create your first task to get started.'
+            }
+          </p>
+          {currentProject && (
+            <button 
+              onClick={() => setShowTaskModal(true)}
+              className="btn-primary flex items-center space-x-2 mx-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Task</span>
+            </button>
+          )}
+        </div>
+      );
+    }
+
     switch (viewMode) {
       case 'list':
         return <TaskListView tasks={filteredTasks} />;
@@ -75,14 +111,22 @@ const TasksPage = () => {
 
   if (error) {
     return (
-      <div className="card p-12 text-center">
-        <div className="text-red-600 mb-4">Error: {error}</div>
-        <button 
-          onClick={() => window.location.reload()} 
-          className="btn-primary"
-        >
-          Retry
-        </button>
+      <div className="space-y-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Tasks</h1>
+            <p className="text-gray-600 mt-1">Error loading tasks</p>
+          </div>
+        </div>
+        <div className="card p-12 text-center">
+          <div className="text-red-600 mb-4">Error: {error}</div>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="btn-primary"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -105,137 +149,151 @@ const TasksPage = () => {
           </div>
 
           <div className="flex items-center space-x-3">
-            <button 
-              onClick={() => setShowTaskModal(true)}
-              className="btn-primary flex items-center space-x-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Task</span>
-            </button>
+            {currentProject && (
+              <button 
+                onClick={() => setShowTaskModal(true)}
+                className="btn-primary flex items-center space-x-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Task</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Toolbar */}
-        <div className="card p-4">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-            {/* Left side - Search and View Toggle */}
-            <div className="flex items-center space-x-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search tasks..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 w-64 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              {/* View Toggle */}
-              <div className="flex items-center bg-gray-100 rounded-lg p-1">
-                {viewOptions.map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => setViewMode(option.id as any)}
-                    className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-all duration-200 ${
-                      viewMode === option.id
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    {option.icon}
-                    <span className="hidden sm:inline text-sm font-medium">{option.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Right side - Filters and Sort */}
-            <div className="flex items-center space-x-3">
-              {/* Status Filter */}
-              <div className="relative">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="appearance-none bg-white border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  {statusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
-              </div>
-
-              {/* Priority Filter */}
-              <div className="relative">
-                <select
-                  value={priorityFilter}
-                  onChange={(e) => setPriorityFilter(e.target.value)}
-                  className="appearance-none bg-white border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  {priorityOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
-              </div>
-
-              <button className="btn-secondary flex items-center space-x-2">
-                <Filter className="w-4 h-4" />
-                <span className="hidden sm:inline">Filter</span>
-              </button>
-
-              <button className="btn-secondary flex items-center space-x-2">
-                <SortAsc className="w-4 h-4" />
-                <span className="hidden sm:inline">Sort</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Task Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {[
-            { label: 'Total Tasks', value: filteredTasks.length, color: 'blue' },
-            { label: 'In Progress', value: filteredTasks.filter(t => t.status === 'in-progress').length, color: 'yellow' },
-            { label: 'Completed', value: filteredTasks.filter(t => t.status === 'done').length, color: 'green' },
-            { label: 'Overdue', value: filteredTasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done').length, color: 'red' },
-          ].map((stat, index) => (
-            <motion.div
-              key={index}
-              className="card p-6"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-            >
-              <div className={`text-2xl font-bold text-${stat.color}-600 mb-1`}>
-                {stat.value}
-              </div>
-              <div className="text-gray-600 text-sm">{stat.label}</div>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Main Content */}
-        {isLoading ? (
+        {!currentProject ? (
           <div className="card p-12 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading tasks...</p>
+            <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Project Selected</h3>
+            <p className="text-gray-600">
+              Please select a project from the sidebar to view and manage tasks.
+            </p>
           </div>
         ) : (
-          <motion.div
-            key={viewMode}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            {renderView()}
-          </motion.div>
+          <>
+            {/* Toolbar */}
+            <div className="card p-4">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                {/* Left side - Search and View Toggle */}
+                <div className="flex items-center space-x-4">
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Search tasks..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10 pr-4 py-2 w-64 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* View Toggle */}
+                  <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                    {viewOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        onClick={() => setViewMode(option.id as any)}
+                        className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-all duration-200 ${
+                          viewMode === option.id
+                            ? 'bg-white text-blue-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        {option.icon}
+                        <span className="hidden sm:inline text-sm font-medium">{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Right side - Filters and Sort */}
+                <div className="flex items-center space-x-3">
+                  {/* Status Filter */}
+                  <div className="relative">
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="appearance-none bg-white border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      {statusOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                  </div>
+
+                  {/* Priority Filter */}
+                  <div className="relative">
+                    <select
+                      value={priorityFilter}
+                      onChange={(e) => setPriorityFilter(e.target.value)}
+                      className="appearance-none bg-white border border-gray-300 rounded-lg px-3 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      {priorityOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                  </div>
+
+                  <button className="btn-secondary flex items-center space-x-2">
+                    <Filter className="w-4 h-4" />
+                    <span className="hidden sm:inline">Filter</span>
+                  </button>
+
+                  <button className="btn-secondary flex items-center space-x-2">
+                    <SortAsc className="w-4 h-4" />
+                    <span className="hidden sm:inline">Sort</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Task Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {[
+                { label: 'Total Tasks', value: filteredTasks.length, color: 'blue' },
+                { label: 'In Progress', value: filteredTasks.filter(t => t.status === 'in-progress').length, color: 'yellow' },
+                { label: 'Completed', value: filteredTasks.filter(t => t.status === 'done').length, color: 'green' },
+                { label: 'Overdue', value: filteredTasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done').length, color: 'red' },
+              ].map((stat, index) => (
+                <motion.div
+                  key={index}
+                  className="card p-6"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                >
+                  <div className={`text-2xl font-bold text-${stat.color}-600 mb-1`}>
+                    {stat.value}
+                  </div>
+                  <div className="text-gray-600 text-sm">{stat.label}</div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Main Content */}
+            {isLoading ? (
+              <div className="card p-12 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading tasks...</p>
+              </div>
+            ) : (
+              <motion.div
+                key={viewMode}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                {renderView()}
+              </motion.div>
+            )}
+          </>
         )}
       </div>
 

@@ -10,7 +10,7 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
-  signup: (name: string, email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   clearError: () => void;
@@ -35,15 +35,24 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
+          if (!email.trim()) {
+            throw new Error('Email is required');
+          }
+          if (!password) {
+            throw new Error('Password is required');
+          }
+          if (!isValidEmail(email.trim())) {
+            throw new Error('Please enter a valid email address');
+          }
+
           const { data, error } = await supabase.auth.signInWithPassword({
             email: email.trim().toLowerCase(),
             password,
           });
 
           if (error) {
-            // Handle specific error cases
-            if (error.message.includes('Email not confirmed')) {
-              throw new Error('Please confirm your email address by clicking the link in the email we sent you.');
+            if (error.message.includes('Invalid login credentials')) {
+              throw new Error('Invalid email or password. Please check your credentials.');
             }
             throw new Error(error.message);
           }
@@ -63,16 +72,15 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      signup: async (name: string, email: string, password: string) => {
+      signup: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
         
         try {
-          // Validate inputs
-          if (!name.trim()) {
-            throw new Error('Name is required');
-          }
           if (!email.trim()) {
             throw new Error('Email is required');
+          }
+          if (!password) {
+            throw new Error('Password is required');
           }
           if (!isValidEmail(email.trim())) {
             throw new Error('Please enter a valid email address');
@@ -85,18 +93,16 @@ export const useAuthStore = create<AuthState>()(
             email: email.trim().toLowerCase(),
             password,
             options: {
-              data: {
-                name: name.trim(),
-                full_name: name.trim(),
-              },
               emailRedirectTo: window.location.origin,
             },
           });
 
           if (error) {
-            // Handle specific error cases
             if (error.message.includes('email_address_invalid')) {
               throw new Error('Please enter a valid email address');
+            }
+            if (error.message.includes('User already registered')) {
+              throw new Error('An account with this email already exists. Please sign in instead.');
             }
             throw new Error(error.message);
           }
@@ -104,10 +110,9 @@ export const useAuthStore = create<AuthState>()(
           if (data.user) {
             set({ user: data.user });
             
-            // Wait longer for the trigger to create the profile
+            // Wait for the trigger to create the profile
             await new Promise(resolve => setTimeout(resolve, 2000));
             
-            // Try to fetch the profile, create it manually if it doesn't exist
             try {
               await get().fetchProfile();
             } catch (profileError) {
@@ -119,13 +124,12 @@ export const useAuthStore = create<AuthState>()(
                 .insert({
                   id: data.user.id,
                   email: data.user.email!,
-                  name: name.trim(),
+                  name: data.user.email!.split('@')[0], // Use email prefix as default name
                 });
               
               if (profileCreateError) {
                 console.warn('Manual profile creation failed:', profileCreateError);
               } else {
-                // Wait a bit more and try to fetch again
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 await get().fetchProfile();
               }
@@ -204,7 +208,6 @@ export const useAuthStore = create<AuthState>()(
 
           if (error) {
             if (error.code === 'PGRST116') {
-              // Profile doesn't exist, this is expected for new users
               console.log('Profile not found for user:', user.id);
               return;
             }
@@ -214,7 +217,6 @@ export const useAuthStore = create<AuthState>()(
           set({ profile: data });
         } catch (error: any) {
           console.error('Error fetching profile:', error);
-          // Don't set error state for profile fetch failures
         }
       },
 

@@ -12,15 +12,15 @@ import {
   ArrowDown,
   Minus
 } from 'lucide-react';
-import { Task } from '../../store/taskStore';
+import { useTaskStore } from '../../store/taskStore';
 import { format } from 'date-fns';
 
 interface TaskListViewProps {
-  tasks: Task[];
+  tasks: any[];
 }
 
 const TaskListView: React.FC<TaskListViewProps> = ({ tasks }) => {
-  const getStatusIcon = (status: Task['status']) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
       case 'done':
         return <CheckCircle className="w-4 h-4 text-green-600" />;
@@ -33,7 +33,7 @@ const TaskListView: React.FC<TaskListViewProps> = ({ tasks }) => {
     }
   };
 
-  const getPriorityIcon = (priority: Task['priority']) => {
+  const getPriorityIcon = (priority: string) => {
     switch (priority) {
       case 'critical':
         return <ArrowUp className="w-4 h-4 text-red-600" />;
@@ -46,7 +46,7 @@ const TaskListView: React.FC<TaskListViewProps> = ({ tasks }) => {
     }
   };
 
-  const getStatusColor = (status: Task['status']) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'todo':
         return 'bg-gray-100 text-gray-700';
@@ -63,7 +63,7 @@ const TaskListView: React.FC<TaskListViewProps> = ({ tasks }) => {
     }
   };
 
-  const getPriorityColor = (priority: Task['priority']) => {
+  const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'critical':
         return 'bg-red-100 text-red-700';
@@ -128,16 +128,16 @@ const TaskListView: React.FC<TaskListViewProps> = ({ tasks }) => {
                         {task.description}
                       </p>
                     )}
-                    {task.subtasks.length > 0 && (
+                    {task.subtasks && task.subtasks.length > 0 && (
                       <div className="flex items-center space-x-2 mt-2">
                         <div className="text-xs text-gray-500">
-                          {task.subtasks.filter(st => st.completed).length}/{task.subtasks.length} subtasks
+                          {task.subtasks.filter((st: any) => st.completed).length}/{task.subtasks.length} subtasks
                         </div>
                         <div className="w-16 bg-gray-200 rounded-full h-1">
                           <div 
                             className="bg-blue-600 h-1 rounded-full"
                             style={{ 
-                              width: `${(task.subtasks.filter(st => st.completed).length / task.subtasks.length) * 100}%` 
+                              width: `${(task.subtasks.filter((st: any) => st.completed).length / task.subtasks.length) * 100}%` 
                             }}
                           />
                         </div>
@@ -164,10 +164,10 @@ const TaskListView: React.FC<TaskListViewProps> = ({ tasks }) => {
 
               {/* Due Date */}
               <div className="col-span-2">
-                {task.dueDate ? (
+                {task.due_date ? (
                   <div className="flex items-center space-x-1 text-sm text-gray-600">
                     <Calendar className="w-4 h-4" />
-                    <span>{format(new Date(task.dueDate), 'MMM d')}</span>
+                    <span>{format(new Date(task.due_date), 'MMM d')}</span>
                   </div>
                 ) : (
                   <span className="text-sm text-gray-400">No date</span>
@@ -180,10 +180,10 @@ const TaskListView: React.FC<TaskListViewProps> = ({ tasks }) => {
                   <div className="w-8 bg-gray-200 rounded-full h-2">
                     <div 
                       className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${task.progress * 100}%` }}
+                      style={{ width: `${(task.progress || 0) * 100}%` }}
                     />
                   </div>
-                  <span className="text-xs text-gray-500">{Math.round(task.progress * 100)}%</span>
+                  <span className="text-xs text-gray-500">{Math.round((task.progress || 0) * 100)}%</span>
                 </div>
               </div>
 

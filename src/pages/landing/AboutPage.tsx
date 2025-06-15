@@ -224,11 +224,13 @@ const AboutPage = () => {
                 transition={{ duration: 0.5, delay: index * 0.1 }}
                 viewport={{ once: true }}
               >
-                <img 
-                  src={member.image} 
-                  alt={member.name}
-                  className="w-24 h-24 rounded-full mx-auto mb-4 object-cover"
-                />
+                <div className="w-24 h-24 mx-auto mb-4 rounded-full overflow-hidden bg-gray-100">
+                  <img 
+                    src={member.image} 
+                    alt={member.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">{member.name}</h3>
                 <p className="text-blue-600 font-medium mb-3">{member.role}</p>
                 <p className="text-gray-600 text-sm">{member.bio}</p>

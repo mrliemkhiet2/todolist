@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Users, 
@@ -17,56 +17,93 @@ import {
 } from 'lucide-react';
 import { useTaskStore } from '../store/taskStore';
 import { useAuthStore } from '../store/authStore';
+import { supabase } from '../lib/supabase';
+
+interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatar_url?: string;
+  last_active?: string;
+  tasks_completed: number;
+  tasks_in_progress: number;
+}
 
 const TeamPage = () => {
   const { projects, tasks, currentProject } = useTaskStore();
-  const { user, profile } = useAuthStore();
+  const { user } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock team members data (in a real app, this would come from the database)
-  const teamMembers = [
-    {
-      id: '1',
-      name: 'Nguyễn Xuân Lĩnh',
-      email: 'linh@taskflow.com',
-      role: 'owner',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=NguyenXuanLinh&backgroundColor=b6e3f4&topType=ShortHairShortFlat&accessoriesType=Prescription02&hairColor=BrownDark&facialHairType=Blank&clotheType=Hoodie&clotheColor=Blue03&eyeType=Default&eyebrowType=Default&mouthType=Default&skinColor=Light',
-      lastActive: '2 hours ago',
-      tasksCompleted: 15,
-      tasksInProgress: 3
-    },
-    {
-      id: '2',
-      name: 'Trần Khánh',
-      email: 'khanh@taskflow.com',
-      role: 'admin',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=TranKhanh&backgroundColor=c0aede&topType=ShortHairShortWaved&accessoriesType=Blank&hairColor=Black&facialHairType=Blank&clotheType=BlazerShirt&clotheColor=Blue01&eyeType=Default&eyebrowType=Default&mouthType=Default&skinColor=Light',
-      lastActive: '1 day ago',
-      tasksCompleted: 12,
-      tasksInProgress: 5
-    },
-    {
-      id: '3',
-      name: 'Ngô Lập',
-      email: 'lap@taskflow.com',
-      role: 'member',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=NgoLap&backgroundColor=ffd93d&topType=ShortHairDreads01&accessoriesType=Blank&hairColor=BrownDark&facialHairType=Blank&clotheType=ShirtCrewNeck&clotheColor=Gray01&eyeType=Default&eyebrowType=Default&mouthType=Default&skinColor=Light',
-      lastActive: '3 hours ago',
-      tasksCompleted: 8,
-      tasksInProgress: 2
-    },
-    {
-      id: '4',
-      name: 'Ngô Nhân',
-      email: 'nhan@taskflow.com',
-      role: 'member',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=NgoNhan&backgroundColor=ffdfbf&topType=ShortHairTheCaesar&accessoriesType=Blank&hairColor=Brown&facialHairType=Blank&clotheType=CollarSweater&clotheColor=Blue02&eyeType=Default&eyebrowType=Default&mouthType=Default&skinColor=Light',
-      lastActive: '5 hours ago',
-      tasksCompleted: 10,
-      tasksInProgress: 4
+  useEffect(() => {
+    fetchTeamMembers();
+  }, [currentProject, user]);
+
+  const fetchTeamMembers = async () => {
+    if (!user || !currentProject) {
+      setTeamMembers([]);
+      setIsLoading(false);
+      return;
     }
-  ];
+
+    try {
+      setIsLoading(true);
+      
+      // Fetch project members with their profiles
+      const { data: members, error } = await supabase
+        .from('project_members')
+        .select(`
+          role,
+          user_id,
+          profiles!inner (
+            id,
+            name,
+            email,
+            avatar_url
+          )
+        `)
+        .eq('project_id', currentProject);
+
+      if (error) {
+        console.error('Error fetching team members:', error);
+        setTeamMembers([]);
+        return;
+      }
+
+      if (!members || members.length === 0) {
+        setTeamMembers([]);
+        return;
+      }
+
+      // Calculate task statistics for each member
+      const membersWithStats = members.map(member => {
+        const memberTasks = tasks.filter(task => task.assignee_id === member.user_id);
+        const completedTasks = memberTasks.filter(task => task.status === 'done').length;
+        const inProgressTasks = memberTasks.filter(task => task.status === 'in-progress').length;
+
+        return {
+          id: member.user_id,
+          name: member.profiles.name,
+          email: member.profiles.email,
+          role: member.role,
+          avatar_url: member.profiles.avatar_url,
+          last_active: '2 hours ago', // This would come from a real activity tracking system
+          tasks_completed: completedTasks,
+          tasks_in_progress: inProgressTasks,
+        };
+      });
+
+      setTeamMembers(membersWithStats);
+    } catch (error) {
+      console.error('Error fetching team members:', error);
+      setTeamMembers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const getRoleIcon = (role: string) => {
     switch (role) {
@@ -105,6 +142,23 @@ const TeamPage = () => {
 
   const currentProjectData = projects.find(p => p.id === currentProject);
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Team</h1>
+            <p className="text-gray-600 mt-1">Loading team members...</p>
+          </div>
+        </div>
+        <div className="card p-12 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading team data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="space-y-6">
@@ -113,190 +167,175 @@ const TeamPage = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Team</h1>
             <p className="text-gray-600 mt-1">
-              Manage team members and their roles in {currentProjectData?.title || 'your workspace'}.
+              {currentProjectData 
+                ? `Manage team members for ${currentProjectData.title}` 
+                : 'Select a project to view team members'
+              }
             </p>
           </div>
 
-          <div className="flex items-center space-x-3">
+          {currentProject && (
+            <div className="flex items-center space-x-3">
+              <button 
+                onClick={() => setShowInviteModal(true)}
+                className="btn-primary flex items-center space-x-2"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Invite Member</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {!currentProject ? (
+          <div className="card p-12 text-center">
+            <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Project Selected</h3>
+            <p className="text-gray-600">
+              Please select a project from the sidebar to view and manage team members.
+            </p>
+          </div>
+        ) : teamMembers.length === 0 ? (
+          <div className="card p-12 text-center">
+            <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Team Members</h3>
+            <p className="text-gray-600 mb-6">
+              This project doesn't have any team members yet. Invite your first team member to get started.
+            </p>
             <button 
               onClick={() => setShowInviteModal(true)}
-              className="btn-primary flex items-center space-x-2"
+              className="btn-primary flex items-center space-x-2 mx-auto"
             >
               <UserPlus className="w-4 h-4" />
-              <span>Invite Member</span>
+              <span>Invite First Member</span>
             </button>
           </div>
-        </div>
+        ) : (
+          <>
+            {/* Search and Filters */}
+            <div className="card p-4">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Search team members..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 pr-4 py-2 w-64 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-        {/* Search and Filters */}
-        <div className="card p-4">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search team members..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 w-64 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div className="flex items-center space-x-3">
-              <select className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                <option>All Roles</option>
-                <option>Owner</option>
-                <option>Admin</option>
-                <option>Member</option>
-                <option>Viewer</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Team Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {[
-            { label: 'Total Members', value: teamMembers.length, color: 'blue' },
-            { label: 'Active Today', value: 3, color: 'green' },
-            { label: 'Tasks Completed', value: teamMembers.reduce((sum, member) => sum + member.tasksCompleted, 0), color: 'purple' },
-            { label: 'Tasks In Progress', value: teamMembers.reduce((sum, member) => sum + member.tasksInProgress, 0), color: 'orange' },
-          ].map((stat, index) => (
-            <motion.div
-              key={index}
-              className="card p-6"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-            >
-              <div className={`text-2xl font-bold text-${stat.color}-600 mb-1`}>
-                {stat.value}
+                <div className="flex items-center space-x-3">
+                  <select className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option>All Roles</option>
+                    <option>Owner</option>
+                    <option>Admin</option>
+                    <option>Member</option>
+                    <option>Viewer</option>
+                  </select>
+                </div>
               </div>
-              <div className="text-gray-600 text-sm">{stat.label}</div>
-            </motion.div>
-          ))}
-        </div>
+            </div>
 
-        {/* Team Members List */}
-        <div className="card">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Team Members</h2>
-          </div>
-
-          <div className="divide-y divide-gray-200">
-            {filteredMembers.map((member, index) => (
-              <motion.div
-                key={member.id}
-                className="px-6 py-4 hover:bg-gray-50 transition-colors"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.1 }}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <img 
-                      src={member.avatar} 
-                      alt={member.name}
-                      className="w-12 h-12 rounded-full"
-                    />
-                    <div>
-                      <h3 className="font-medium text-gray-900">{member.name}</h3>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <Mail className="w-3 h-3 text-gray-400" />
-                        <span className="text-sm text-gray-500">{member.email}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-6">
-                    <div className="text-center">
-                      <div className="text-sm font-medium text-gray-900">{member.tasksCompleted}</div>
-                      <div className="text-xs text-gray-500">Completed</div>
-                    </div>
-                    
-                    <div className="text-center">
-                      <div className="text-sm font-medium text-gray-900">{member.tasksInProgress}</div>
-                      <div className="text-xs text-gray-500">In Progress</div>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      {getRoleIcon(member.role)}
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(member.role)}`}>
-                        {member.role}
-                      </span>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-sm text-gray-500">Last active</div>
-                      <div className="text-xs text-gray-400">{member.lastActive}</div>
-                    </div>
-
-                    <button className="p-1 hover:bg-gray-100 rounded transition-colors">
-                      <MoreHorizontal className="w-4 h-4 text-gray-400" />
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
-        {/* Team Activity */}
-        <div className="card">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
-          </div>
-
-          <div className="p-6">
-            <div className="space-y-4">
+            {/* Team Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {[
-                {
-                  user: 'Nguyễn Xuân Lĩnh',
-                  action: 'completed task',
-                  target: 'Design system documentation',
-                  time: '2 hours ago',
-                  type: 'completed'
-                },
-                {
-                  user: 'Trần Khánh',
-                  action: 'created task',
-                  target: 'API endpoint testing',
-                  time: '4 hours ago',
-                  type: 'created'
-                },
-                {
-                  user: 'Ngô Lập',
-                  action: 'commented on',
-                  target: 'User interface mockups',
-                  time: '6 hours ago',
-                  type: 'commented'
-                },
-                {
-                  user: 'Ngô Nhân',
-                  action: 'updated task',
-                  target: 'Database optimization',
-                  time: '1 day ago',
-                  type: 'updated'
-                }
-              ].map((activity, index) => (
-                <div key={index} className="flex items-center space-x-3">
-                  <div className={`w-2 h-2 rounded-full ${
-                    activity.type === 'completed' ? 'bg-green-500' :
-                    activity.type === 'created' ? 'bg-blue-500' :
-                    activity.type === 'commented' ? 'bg-yellow-500' :
-                    'bg-purple-500'
-                  }`} />
-                  <div className="flex-1">
-                    <span className="font-medium text-gray-900">{activity.user}</span>
-                    <span className="text-gray-600"> {activity.action} </span>
-                    <span className="font-medium text-gray-900">{activity.target}</span>
+                { label: 'Total Members', value: teamMembers.length, color: 'blue' },
+                { label: 'Active Today', value: teamMembers.length, color: 'green' },
+                { label: 'Tasks Completed', value: teamMembers.reduce((sum, member) => sum + member.tasks_completed, 0), color: 'purple' },
+                { label: 'Tasks In Progress', value: teamMembers.reduce((sum, member) => sum + member.tasks_in_progress, 0), color: 'orange' },
+              ].map((stat, index) => (
+                <motion.div
+                  key={index}
+                  className="card p-6"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                >
+                  <div className={`text-2xl font-bold text-${stat.color}-600 mb-1`}>
+                    {stat.value}
                   </div>
-                  <span className="text-sm text-gray-500">{activity.time}</span>
-                </div>
+                  <div className="text-gray-600 text-sm">{stat.label}</div>
+                </motion.div>
               ))}
             </div>
-          </div>
-        </div>
+
+            {/* Team Members List */}
+            <div className="card">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-900">Team Members</h2>
+              </div>
+
+              <div className="divide-y divide-gray-200">
+                {filteredMembers.map((member, index) => (
+                  <motion.div
+                    key={member.id}
+                    className="px-6 py-4 hover:bg-gray-50 transition-colors"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.1 }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+                          {member.avatar_url ? (
+                            <img 
+                              src={member.avatar_url} 
+                              alt={member.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <img 
+                              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${member.email}`} 
+                              alt={member.name}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <h3 className="font-medium text-gray-900">{member.name}</h3>
+                          <div className="flex items-center space-x-2 mt-1">
+                            <Mail className="w-3 h-3 text-gray-400" />
+                            <span className="text-sm text-gray-500">{member.email}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-6">
+                        <div className="text-center">
+                          <div className="text-sm font-medium text-gray-900">{member.tasks_completed}</div>
+                          <div className="text-xs text-gray-500">Completed</div>
+                        </div>
+                        
+                        <div className="text-center">
+                          <div className="text-sm font-medium text-gray-900">{member.tasks_in_progress}</div>
+                          <div className="text-xs text-gray-500">In Progress</div>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          {getRoleIcon(member.role)}
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(member.role)}`}>
+                            {member.role}
+                          </span>
+                        </div>
+
+                        <div className="text-right">
+                          <div className="text-sm text-gray-500">Last active</div>
+                          <div className="text-xs text-gray-400">{member.last_active}</div>
+                        </div>
+
+                        <button className="p-1 hover:bg-gray-100 rounded transition-colors">
+                          <MoreHorizontal className="w-4 h-4 text-gray-400" />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Invite Modal */}
